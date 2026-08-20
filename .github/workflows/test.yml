@@ -1,0 +1,18 @@
+# CUDATracker GitHub Actions — CPU tests only.
+
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy opencv-python PyYAML pytest
+      - run: python -m pytest tests/test_config tests/test_detection tests/test_tracking tests/test_bench tests/test_analytics tests/test_preprocessing/test_preprocess.py -k "not cuda"
+        env:
+          PYTHONPATH: python
