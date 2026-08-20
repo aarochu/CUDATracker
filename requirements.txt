@@ -1,5 +1,6 @@
-# Python: export, bench, plots, and the live runner (`python -m cudatracker`).
-# C++/CUDA binary on Jetson still needs JetPack packages; see docs/jetson_setup.md.
+# Python: export, bench, plots, and the live runner on x86 (`python -m cudatracker`).
+# Jetson: do not pip-install this file as-is. JetPack owns CUDA/TensorRT/OpenCV;
+# PyTorch is NVIDIA's aarch64 wheel, not PyPI torch. See docs/jetson_setup.md.
 
 numpy>=1.26
 opencv-python>=4.8

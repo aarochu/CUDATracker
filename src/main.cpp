@@ -189,6 +189,13 @@ int main(int argc, char** argv) {
                 times.end_to_end_ms =
                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
                 if (key == 'q') break;
+                if (key == 'h') cfg.hardware_panel = !cfg.hardware_panel;
+                if (key == 't') cfg.trails = !cfg.trails;
+                if (key == 'd') cfg.hud = !cfg.hud;
+                if (key == 'p' || key == '1' || key == '2') {
+                    log_line("INFO", "app",
+                             "C++ live reload of preprocess/precision is not wired; pass --preprocess / --precision");
+                }
             }
             if (bench && frames >= cfg.warmup_frames) measured.push_back(times);
             if (++frames % 30 == 0) {

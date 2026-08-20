@@ -47,7 +47,7 @@ class Capture:
             cap = cv2.VideoCapture(src)
         if not cap.isOpened():
             raise RuntimeError(
-                f"OpenCV could not open '{src}'. For CSI on Jetson, pass a GStreamer string and set input.gstreamer: true."
+                f"OpenCV could not open '{src}'. CSI on Jetson needs Argus+NVMM (nvarguscamerasrc) and OpenCV built with GStreamer; see docs/jetson_setup.md."
             )
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)

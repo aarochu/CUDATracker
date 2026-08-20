@@ -9,7 +9,7 @@ python benchmarks/benchmark.py --config configs/benchmark.yaml
 python benchmarks/plot.py --input benchmarks/results
 ```
 
-`--quick` on the matrix runner is 2 warmup / 8 measure frames for a smoke pass. Published numbers should use the YAML defaults (50 / 300) and a recorded `nvpmodel` / `jetson_clocks` state on Jetson.
+`--quick` on the matrix runner is 2 warmup / 8 measure frames for a smoke pass. Published numbers use the YAML defaults (50 / 300) on Jetson: one `nvpmodel` mode, `jetson_clocks` either on or off for the whole matrix, L4T from `/etc/nv_tegra_release`. Commands: [docs/jetson_setup.md](jetson_setup.md).
 
 Cells that cannot run (missing engine, ONNX+fp16, no TensorRT EP) write `skipped=true` and a reason. Do not delete those rows.
 

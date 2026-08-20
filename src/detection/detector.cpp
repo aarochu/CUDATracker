@@ -3,6 +3,7 @@
 #include "app/types.hpp"
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <map>
 #include <opencv2/dnn.hpp>
 #include <stdexcept>
@@ -34,19 +35,26 @@ OpenCvDnnBackend::OpenCvDnnBackend(const std::string& onnx, bool try_cuda) {
     if (!probe) throw std::runtime_error("ONNX file missing: " + onnx + ". Run python scripts/export_onnx.py");
     net_ = cv::dnn::readNetFromONNX(onnx);
     if (net_.empty()) throw std::runtime_error("OpenCV DNN failed to load " + onnx);
+    bool cuda_ok = false;
     if (try_cuda) {
+        net_.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+        net_.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
         try {
-            net_.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
-            net_.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+            const int sz[4] = {1, 3, 640, 640};
+            cv::Mat blob(4, sz, CV_32F, cv::Scalar(0));
+            net_.setInput(blob);
+            std::vector<cv::Mat> outs;
+            net_.forward(outs);
+            cuda_ok = true;
             log_line("INFO", "infer", "OpenCV DNN CUDA target");
-        } catch (...) {
-            log_line("WARN", "infer", "OpenCV DNN CUDA unavailable; CPU");
-            net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-            net_.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+        } catch (const cv::Exception& e) {
+            log_line("WARN", "infer", std::string("OpenCV DNN CUDA not in this OpenCV build: ") + e.err);
         }
-    } else {
+    }
+    if (!cuda_ok) {
         net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
         net_.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+        log_line("INFO", "infer", "OpenCV DNN CPU");
     }
 }
 

@@ -4,7 +4,7 @@ Run a Jetson camera (or a video file) through detection and tracking, then prove
 
 [SOW.md](SOW.md) is the construction spec. If this file and SOW disagree, SOW wins.
 
-**Status:** pipeline code is in the tree. The live runner is `python -m cudatracker` (Windows/x86 and Jetson). The CMake `cudatracker` binary is OpenCV DNN ONNX, optional CUDA kernels, optional TensorRT (`-DWITH_TENSORRT=ON`), SORT, and `--bench` JSON/CSV. FPS numbers belong in `docs/results.md` only after `benchmarks/results/` has a run.
+**Status:** Python live runner works on Windows/x86 and Jetson. Native TensorRT engines are `python scripts/build_engine.py` (Python TensorRT API if `trtexec` is missing). CMake `cudatracker` is OpenCV DNN ONNX + optional CUDA kernels + optional TensorRT. Published FPS live in `docs/results.md` after `benchmarks/results/matrix.csv`.
 
 ---
 
@@ -16,7 +16,7 @@ python scripts/fetch_sample.py
 python scripts/export_onnx.py --model yolov8n --imgsz 640
 ```
 
-Jetson extra steps: [docs/jetson_setup.md](docs/jetson_setup.md). Weights: [models/README.md](models/README.md).
+Jetson extra steps (NVIDIA docs mapped onto this repo): [docs/jetson_setup.md](docs/jetson_setup.md). Weights: [models/README.md](models/README.md).
 
 ---
 
@@ -34,7 +34,13 @@ python -m cudatracker --source samples/vtest.avi --bench --warmup 20 --frames 10
 
 Keys in the window: `q` quit, `h` hardware drawer, `t` trails, `d` HUD, `p` CPU/CUDA preprocess, `1`/`2` FP32/FP16 (reloads the backend).
 
-C++ (after CMake): `./build/cudatracker --config configs/default.yaml --source samples/vtest.avi`
+C++ (after CMake). Jetson: `cmake -S . -B build -DWITH_CUDA=ON -DWITH_TENSORRT=ON`. Windows: OpenCV official pack is vc16 — point CMake at `.../opencv/build/x64/vc16/lib` if `find_package(OpenCV)` rejects VS 2026, put that `bin` on PATH, and use `-DWITH_TENSORRT=OFF` unless you have `NvInfer.h`.
+
+```text
+./build/cudatracker --config configs/default.yaml --source samples/vtest.avi
+# Windows Release:
+# build\Release\cudatracker.exe --config configs/default.yaml --source samples/vtest.avi --backend onnx --bench
+```
 
 ---
 
@@ -47,7 +53,7 @@ python benchmarks/benchmark.py --config configs/benchmark.yaml
 python benchmarks/plot.py --input benchmarks/results
 ```
 
-`--quick` is a smoke pass (2+8 frames). Published tables should use the YAML 50/300 counts and a fixed `nvpmodel` / `jetson_clocks` on Jetson.
+`--quick` is a smoke pass (2+8 frames). Published tables use the YAML 50/300 counts on one Jetson, one `nvpmodel` mode, and a recorded `jetson_clocks --show`. See [docs/jetson_setup.md](docs/jetson_setup.md).
 
 Matrix: preprocess `{cpu, cuda}` × backend `{pytorch, onnx, tensorrt}` × precision `{fp32, fp16}` where it exists × `640x480` / `1280x720` / `1920x1080`. Skipped cells stay in the CSV with a reason.
 
@@ -63,7 +69,7 @@ CPU: OpenCV resize / cvtColor / CHW, reference tensor. CUDA: kernels in `cuda/` 
 
 ## TensorRT
 
-`python scripts/export_onnx.py` writes ONNX with NMS **outside** the graph. `python scripts/build_engine.py` calls `trtexec` when it exists. If it does not, the TensorRT backend uses ONNX Runtime's TensorRT EP and caches engines under `models/ort_trt_cache/`.
+`python scripts/export_onnx.py` writes ONNX with NMS **outside** the graph. `python scripts/build_engine.py` calls `trtexec` (`/usr/src/tensorrt/bin/trtexec` on Jetson after JetPack). On x86, if `trtexec` is missing the TensorRT backend can use ORT's TensorRT EP when `nvinfer` is installed — not a substitute for JetPack TensorRT on the board.
 
 ---
 
@@ -101,10 +107,10 @@ GPU preprocess comparison skips if CUDA is missing.
 
 ## Limits
 
-Clocks and power mode change the table. PyTorch on Orin Nano may only be a 640 baseline. CSI strings differ by carrier. Power is `na` when the sensor is missing. This is latency engineering on a public YOLOv8n, not a COCO mAP paper.
+Clocks and `nvpmodel` change the table. PyTorch on Orin Nano may only be a 640 baseline. CSI pipelines need Argus + NVMM and differ by sensor. Power is `na` when `tegrastats` / INA are missing. This is latency engineering on a public YOLOv8n, not a COCO mAP paper.
 
 ---
 
 ## Later
 
-Fused preprocess, overlap copy+infer, ByteTrack, a second model size: only after a timed CPU baseline exists in `benchmarks/results/`.
+Fused preprocess, overlap copy+infer, ByteTrack, a second model size: only after a timed CPU baseline exists in `benchmarks/results/`. That baseline is in the laptop matrix; fused is still unmeasured.

@@ -47,15 +47,32 @@ if(WITH_CUDA)
   )
   target_compile_definitions(ct_core PUBLIC CT_WITH_CUDA=1)
   target_link_libraries(ct_core PUBLIC CUDA::cudart)
-  set_target_properties(ct_core PROPERTIES CUDA_ARCHITECTURES "75;80;86;87;89;90")
+  # CUDA 13 dropped sm_72 (Xavier). Keep 72 on older toolkits used by JetPack 5.
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13)
+    set(_ct_sms "75;80;86;87;89;90;100;120")
+  else()
+    set(_ct_sms "72;75;80;86;87;89")
+  endif()
+  set_target_properties(ct_core PROPERTIES CUDA_ARCHITECTURES "${_ct_sms}")
 endif()
 
 if(WITH_TENSORRT)
   find_package(CUDAToolkit REQUIRED)
-  find_path(TENSORRT_INCLUDE NvInfer.h)
-  find_library(TENSORRT_LIB nvinfer)
+  find_path(TENSORRT_INCLUDE NvInfer.h
+    HINTS
+      /usr/include
+      /usr/include/aarch64-linux-gnu
+      /usr/include/x86_64-linux-gnu
+      $ENV{TENSORRT_ROOT}/include
+  )
+  find_library(TENSORRT_LIB nvinfer
+    HINTS
+      /usr/lib/aarch64-linux-gnu
+      /usr/lib/x86_64-linux-gnu
+      $ENV{TENSORRT_ROOT}/lib
+  )
   if(NOT TENSORRT_INCLUDE OR NOT TENSORRT_LIB)
-    message(FATAL_ERROR "WITH_TENSORRT=ON but TensorRT was not found")
+    message(FATAL_ERROR "WITH_TENSORRT=ON but TensorRT was not found (Jetson: apt install nvidia-jetpack; headers often in /usr/include/aarch64-linux-gnu)")
   endif()
   target_sources(ct_core PRIVATE src/inference/tensorrt/engine.cpp)
   target_include_directories(ct_core PUBLIC ${TENSORRT_INCLUDE})

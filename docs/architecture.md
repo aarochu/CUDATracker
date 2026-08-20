@@ -6,7 +6,7 @@ CUDATracker is a staged pipeline: capture → preprocess (CPU OpenCV or project 
 
 `python -m cudatracker` is the complete runner (PyTorch, ONNX Runtime, TensorRT EP or native engine, NVRTC-launched kernels from `cuda/*.cu`, HUD, matrix). Use it on Windows and on Jetson until the C++ binary is built.
 
-`cudatracker` from CMake is the C++ path: OpenCV capture, CPU or CUDA preprocess, OpenCV DNN ONNX, optional native TensorRT (`-DWITH_TENSORRT=ON`) bound to the CUDA preprocess device buffer, SORT (Kalman + Hungarian), HUD, and `--bench` JSON/CSV.
+`cudatracker` from CMake is the C++ path: OpenCV capture, CPU or CUDA preprocess, OpenCV DNN ONNX, optional native TensorRT (`-DWITH_TENSORRT=ON`) bound to the CUDA preprocess device buffer, SORT (Kalman + Hungarian), HUD, and `--bench` JSON/CSV. On Jetson, TensorRT is the JetPack library (`/usr/src/tensorrt/bin/trtexec`, `libnvinfer`). On this Windows box, engines come from `scripts/build_engine.py` via the pip TensorRT 11 API. nvcc on CUDA 13 emits Orin `sm_87` plus desktop SMs through `sm_120`; Xavier `sm_72` is only compiled on CUDA < 13.
 
 Interfaces in Python: `Capture`, `CudaPreprocessor` / `cpu_preprocess`, `InferBackend` (`pytorch` / `onnx` / `tensorrt`), `decode_yolo`, `SortTracker`. C++ mirrors capture, preprocess, `IInferBackend`, `SortTracker`.
 

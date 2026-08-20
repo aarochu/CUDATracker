@@ -32,7 +32,11 @@ class HardwareSampler:
         self._thread: threading.Thread | None = None
         self._nvml = None
         self._nvml_dev = None
+        self._tg: subprocess.Popen[str] | None = None
+        self._tg_lock = threading.Lock()
+        self._tg_last: dict[str, Any] = {}
         self._init_nvml()
+        self._start_tegrastats()
 
     def _init_nvml(self) -> None:
         try:
@@ -55,8 +59,41 @@ class HardwareSampler:
         self._thread = threading.Thread(target=self._loop, name="hw-telemetry", daemon=True)
         self._thread.start()
 
+    def _start_tegrastats(self) -> None:
+        if not Path("/etc/nv_tegra_release").exists():
+            return
+        exe = _which("tegrastats")
+        if not exe:
+            return
+        try:
+            self._tg = subprocess.Popen(
+                [exe, "--interval", "1000"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            threading.Thread(target=self._tg_reader, name="tegrastats", daemon=True).start()
+        except Exception:
+            self._tg = None
+
+    def _tg_reader(self) -> None:
+        proc = self._tg
+        if proc is None or proc.stdout is None:
+            return
+        for line in proc.stdout:
+            parsed = parse_tegrastats_line(line)
+            if parsed:
+                with self._tg_lock:
+                    self._tg_last = parsed
+
     def stop(self) -> None:
         self._stop.set()
+        if self._tg:
+            try:
+                self._tg.terminate()
+            except Exception:
+                pass
+            self._tg = None
         if self._thread:
             self._thread.join(timeout=2)
         if self._nvml:
@@ -118,6 +155,12 @@ class HardwareSampler:
                 pass
         jet = _jetson_sysfs()
         out.update({k: v for k, v in jet.items() if v is not None})
+        with self._tg_lock:
+            tg = dict(self._tg_last)
+        if tg.get("gpu_util") is not None:
+            out["gpu_util"] = tg["gpu_util"]
+        if tg.get("power_w") is not None:
+            out["power_w"] = tg["power_w"]
         return out
 
 
@@ -187,12 +230,35 @@ def _jetson_power_w() -> float | None:
     return None
 
 
+def parse_tegrastats_line(line: str) -> dict[str, Any]:
+    """GR3D_FREQ percent and module-input milliwatts from one tegrastats line.
+
+    Prefer VIN_SYS_5V0 / VDD_IN / POM_5V_IN over summing rails (those overlap).
+    """
+    import re
+
+    out: dict[str, Any] = {}
+    g = re.search(r"GR3D_FREQ\s+(\d+(?:\.\d+)?)\s*%", line)
+    if g:
+        out["gpu_util"] = float(g.group(1))
+    power = None
+    for rail in ("VIN_SYS_5V0", "VDD_IN", "POM_5V_IN"):
+        m = re.search(rf"{rail}\s+(\d+(?:\.\d+)?)\s*mW", line)
+        if m:
+            power = float(m.group(1)) / 1000.0
+            break
+    if power is not None:
+        out["power_w"] = power
+    return out
+
+
 def environment_metadata() -> dict[str, Any]:
     meta: dict[str, Any] = {
         "hostname": platform.node(),
         "platform": platform.platform(),
         "python": platform.python_version(),
         "soc": None,
+        "l4t": None,
         "jetpack": None,
         "cuda": None,
         "tensorrt": None,
@@ -224,15 +290,19 @@ def environment_metadata() -> dict[str, Any]:
         pass
     nv_tegra = Path("/etc/nv_tegra_release")
     if nv_tegra.exists():
-        meta["jetpack"] = nv_tegra.read_text(errors="replace").strip().splitlines()[0]
+        meta["l4t"] = nv_tegra.read_text(errors="replace").strip().splitlines()[0]
+    jp = _which_run(["dpkg-query", "-W", "-f", "${Version}", "nvidia-jetpack"])
+    if jp:
+        meta["jetpack"] = jp.strip()
     soc = Path("/proc/device-tree/model")
     if soc.exists():
         meta["soc"] = soc.read_text(errors="replace").replace("\x00", "").strip()
-    nvp = _which_run(["nvpmodel", "-q"])
+    nvp = _which_run(["nvpmodel", "-q"]) or _which_run(["/usr/sbin/nvpmodel", "-q"])
     if nvp:
         meta["nvpmodel"] = nvp.strip()
-    # jetson_clocks has no standard "am I on" flag; record if the binary exists
-    meta["jetson_clocks"] = bool(_which("jetson_clocks"))
+    clocks = _which_run(["jetson_clocks", "--show"]) or _which_run(["/usr/bin/jetson_clocks", "--show"])
+    if clocks:
+        meta["jetson_clocks"] = clocks.strip()[:4000]
     return meta
 
 

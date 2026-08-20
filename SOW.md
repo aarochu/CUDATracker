@@ -54,17 +54,17 @@ Custom CUDA exists for work we own and can explain in `docs/optimization.md`. If
 
 ## Machines
 
-Primary: NVIDIA Jetson (Orin Nano, Orin NX, AGX Orin; Xavier if that is what is on the desk). Do not hardcode one SoC.
+Primary: NVIDIA Jetson. Do not hardcode one SoC. Orin Nano / Orin NX / AGX Orin run JetPack 6 (L4T R36) or the current JetPack 7 image for that kit (L4T R39 on current AGX Orin). Xavier NX / AGX Xavier, if that is what is on the desk, stay on JetPack 5 (L4T R35).
 
-Secondary: x86 with an NVIDIA GPU for export, kernel tests, plots. Jetson-only bits (`nvarguscamerasrc`, `nvpmodel`, some thermal zones, INA power) stub or skip with a log line.
+Secondary: x86 with an NVIDIA GPU for export, kernel tests, plots. Jetson-only bits (`nvarguscamerasrc`, `nvpmodel`, `tegrastats`, INA) stub or skip with `na`.
 
-Inputs, in this order: USB (`/dev/video0` or index `0`); CSI via a GStreamer string; a `.mp4` / `.avi` / image sequence (required for CI); a folder of stills for unit tests.
+Inputs, in this order: USB (`/dev/video0` or index `0`); CSI via an Argus GStreamer string (`nvarguscamerasrc` + `memory:NVMM`); a `.mp4` / `.avi` / image sequence (required for CI); a folder of stills for unit tests.
 
 Expected stack, versions recorded from the board that produced published numbers, not baked into C++:
 
-JetPack CUDA + cuDNN + TensorRT, OpenCV with GStreamer (CUDA modules if present), Python 3.8–3.12, a Jetson PyTorch wheel or an ONNX-only baseline if libtorch is too heavy, ONNX Runtime (CUDA EP, CPU EP fallback), CMake 3.18+, g++ / nvcc.
+JetPack CUDA + cuDNN + TensorRT (`/usr/src/tensorrt/bin/trtexec`), OpenCV with GStreamer (the JetPack build, not a PyPI `opencv-python` wheel), Python 3.8 (JP5) / 3.10 (JP6) / 3.12 (JP7-era Ubuntu). Jetson PyTorch from NVIDIA’s Jetson wheel docs, or ONNX/TensorRT only if that wheel is too heavy. CMake 3.18+, g++ / nvcc. Do not install `tensorrt-cu13` or `onnxruntime-gpu` from PyPI on aarch64.
 
-Fairness: a published comparison records `nvpmodel`, whether `jetson_clocks` ran, SoC, JetPack, CUDA, TensorRT. Mixing 15W and MAXN in one table is an invalid run.
+Fairness: a published comparison records SoC, `/etc/nv_tegra_release` (L4T), `nvidia-jetpack` if installed, CUDA, TensorRT, `nvpmodel -q`, and `jetson_clocks --show`. Mixing nvpmodel modes or clocks-on vs clocks-off in one table is invalid. MAXN / MAXN_SUPER are SKU- and flash-config-specific; NVIDIA documents MAXN as unconstrained/experimental, not “always the fastest mode.”
 
 ---
 
@@ -241,7 +241,7 @@ Hardware sources: `/proc/stat`, `cudaMemGetInfo`, thermal zones, `tegrastats` GR
 
 Each run: JSON (full) + one CSV row.
 
-JSON includes git hash, hostname, SoC, JetPack, CUDA, TensorRT, OpenCV, nvpmodel, jetson_clocks, the config snapshot, warmup/measure counts, every metric below, input path, and a content hash if the source is a file.
+JSON includes git hash, hostname, SoC, L4T (`/etc/nv_tegra_release`), JetPack metapackage if present, CUDA, TensorRT, OpenCV, `nvpmodel -q`, `jetson_clocks --show`, the config snapshot, warmup/measure counts, every metric below, input path, and a content hash if the source is a file.
 
 Derived speedups (CPU→CUDA, PT→TRT, FP32→FP16) are computed from those files. Do not type them into the HUD by hand.
 

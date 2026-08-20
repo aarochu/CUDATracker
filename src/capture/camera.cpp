@@ -34,7 +34,7 @@ bool Capture::open(const AppConfig& cfg, bool loop) {
     if (!ok) {
         log_line("ERROR", "capture",
                  "OpenCV could not open " + cfg.source +
-                     ". For CSI on Jetson, pass a GStreamer string and set input.gstreamer: true.");
+                     ". CSI on Jetson needs nvarguscamerasrc + memory:NVMM and OpenCV with GStreamer (docs/jetson_setup.md).");
         return false;
     }
     cap_.set(cv::CAP_PROP_FRAME_WIDTH, cfg.width);
