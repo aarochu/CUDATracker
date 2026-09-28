@@ -29,3 +29,10 @@ def test_fused_none_keeps_yaml():
     assert cfg.preprocess.fused is True
     apply_overrides(cfg, fused=False)
     assert cfg.preprocess.fused is False
+
+
+def test_engine_override_updates_selected_precision():
+    cfg = AppConfig()
+    apply_overrides(cfg, precision="fp16", engine="custom.engine")
+    assert cfg.model.engine_fp16 == "custom.engine"
+    assert cfg.model.engine_fp32 != "custom.engine"

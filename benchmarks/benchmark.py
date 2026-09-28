@@ -44,10 +44,13 @@ def run_cell(base: AppConfig, pre: str, backend: str, precision: str, resolution
         row["skipped"] = True
         row["skip_reason"] = reason
         return row
+    pipe = None
     try:
         pipe = Pipeline(cfg, loop_source=True)
         pipe.open()
-    except (BackendNotAvailable, FileNotFoundError, RuntimeError) as exc:
+    except (BackendNotAvailable, FileNotFoundError, ImportError, RuntimeError) as exc:
+        if pipe is not None:
+            pipe.close()
         row = flatten_row(cfg, {"fps": 0, "end_to_end": {}, "stages": {}, "hardware": {}, "analytics": {}})
         row["skipped"] = True
         row["skip_reason"] = str(exc)
@@ -64,6 +67,11 @@ def run_cell(base: AppConfig, pre: str, backend: str, precision: str, resolution
                 pipe.begin_measure()
         n = len(pipe._e2e)
         skip = min(warmup, n)
+        if n == skip:
+            row = flatten_row(cfg, {"fps": 0, "end_to_end": {}, "stages": {}, "hardware": {}, "analytics": {}})
+            row["skipped"] = True
+            row["skip_reason"] = "source ended before any measured frames"
+            return row
         summary = pipe.record_window(skip=skip)
         write_run_artifacts(cfg, summary)
         row = flatten_row(cfg, summary)

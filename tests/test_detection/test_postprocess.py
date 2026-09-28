@@ -67,6 +67,20 @@ def test_class_aware_nms_keeps_two_classes():
     assert {d.class_id for d in dets} == {0, 1}
 
 
+def test_class_aware_nms_without_batched_api(monkeypatch):
+    from types import SimpleNamespace
+    from cudatracker.detection import postprocess
+
+    nms = postprocess.cv2.dnn.NMSBoxes
+    monkeypatch.setattr(postprocess, "cv2", SimpleNamespace(dnn=SimpleNamespace(NMSBoxes=nms)))
+    arr = np.zeros((2, 84), dtype=np.float32)
+    arr[:, :4] = [20, 20, 30, 30]
+    arr[0, 4] = 0.9
+    arr[1, 5] = 0.85
+    meta = letterbox_geometry(640, 640, 640, True)
+    assert {d.class_id for d in decode_yolo(arr[None], meta, 0.25, 0.45)} == {0, 1}
+
+
 def test_nms_index_shapes():
     assert _as_index_array(None).size == 0
     assert _as_index_array([]).size == 0

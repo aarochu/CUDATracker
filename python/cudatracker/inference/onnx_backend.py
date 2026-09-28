@@ -61,9 +61,7 @@ class OnnxBackend:
 
     def infer(self, tensor: Any) -> Any:
         if self._session is not None:
-            import torch
-
-            if isinstance(tensor, torch.Tensor) and tensor.is_cuda and self._cuda_ep:
+            if getattr(tensor, "is_cuda", False) and self._cuda_ep:
                 io = self._session.io_binding()
                 device_id = 0 if tensor.device.index is None else int(tensor.device.index)
                 io.bind_input(
