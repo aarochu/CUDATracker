@@ -1,0 +1,72 @@
+# CD: pushing a tag like v0.2.0 reruns CI, builds the Linux x86_64 binary with the
+# CUDA kernels and native TensorRT backend, and publishes a GitHub release with it.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  linux-binary:
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CUDA_VER: "13.4"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install CUDA, TensorRT, and OpenCV
+        run: |
+          wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring_1.1-1_all.deb
+          sudo apt-get update
+          trt="$(apt-cache madison libnvinfer-dev | awk '{print $3}' | grep -m1 -E "\+cuda${CUDA_VER//./\\.}\$")"
+          test -n "$trt"
+          sudo apt-get install -y --no-install-recommends \
+            "cuda-nvcc-${CUDA_VER/./-}" "cuda-cudart-dev-${CUDA_VER/./-}" \
+            "libnvinfer-dev=${trt}" "libnvinfer-headers-dev=${trt}" "libnvinfer-safe-headers-dev=${trt}" \
+            "libnvinfer${trt%%.*}=${trt}" libopencv-dev
+          echo "TRT_VER=${trt%%-*}" >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_CUDA=ON -DWITH_TENSORRT=ON \
+            -DCMAKE_CUDA_COMPILER="/usr/local/cuda-${CUDA_VER}/bin/nvcc"
+          cmake --build build -j "$(nproc)"
+      - name: Package
+        run: |
+          name="cudatracker-${GITHUB_REF_NAME}-linux-x86_64-cuda${CUDA_VER}-trt${TRT_VER}"
+          mkdir -p "dist/${name}/bin"
+          cp build/cudatracker "dist/${name}/bin/"
+          cp -r configs README.md LICENSE "dist/${name}/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-binary
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: linux-binary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-binary
+          path: dist
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          file="$(ls dist/*.tar.gz)"
+          gh release create "$GITHUB_REF_NAME" "$file" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+            --notes "Prebuilt $(basename "$file"): Linux x86_64 (Ubuntu 24.04) with the CUDA kernels and native TensorRT backend. It needs the matching CUDA runtime, TensorRT, and OpenCV 4.6 (libopencv-dev) installed. On Jetson, build from source (docs/jetson_setup.md)."

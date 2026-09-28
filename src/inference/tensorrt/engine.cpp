@@ -54,7 +54,8 @@ size_t dtype_size(nvinfer1::DataType t) {
 
 int64_t volume(const nvinfer1::Dims& d) {
     int64_t n = 1;
-    for (int i = 0; i < d.nbDims; ++i) n *= std::max(d.d[i], 1);
+    // TensorRT 10+ Dims is Dims64 (int64_t extents); TensorRT 8 uses int32_t.
+    for (int i = 0; i < d.nbDims; ++i) n *= std::max<int64_t>(d.d[i], 1);
     return n;
 }
 
@@ -86,7 +87,7 @@ struct TrtBackend::Impl {
     }
 };
 
-TrtBackend::TrtBackend(const std::string& engine_path) : impl_(std::make_unique<Impl>()) {
+TrtBackend::TrtBackend(const std::string& engine_path, int imgsz) : impl_(std::make_unique<Impl>()) {
     std::ifstream in(engine_path, std::ios::binary);
     if (!in) throw std::runtime_error("cannot open TensorRT engine " + engine_path + " — run python scripts/build_engine.py");
     std::vector<char> blob((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -129,6 +130,9 @@ TrtBackend::TrtBackend(const std::string& engine_path) : impl_(std::make_unique<
         if (impl_->in_dims.d[i] < 0)
             throw std::runtime_error("dynamic-shape TensorRT engines are not supported in v1; re-export with dynamic=False");
     }
+    if (volume(impl_->in_dims) != 3LL * imgsz * imgsz)
+        throw std::runtime_error("TensorRT engine input does not match model.imgsz " + std::to_string(imgsz) +
+                                 "; rebuild the engine at that size");
     impl_->in_bytes = static_cast<size_t>(volume(impl_->in_dims)) * sizeof(float);
     impl_->out_bytes = static_cast<size_t>(volume(impl_->out_dims)) * dtype_size(impl_->out_type);
     ck_cuda(cudaMalloc(&impl_->d_in, impl_->in_bytes), "cudaMalloc TRT input");
@@ -158,7 +162,8 @@ std::vector<cv::Mat> TrtBackend::infer_device(float* device_nchw) {
 
     std::vector<int> sizes;
     sizes.reserve(impl_->out_dims.nbDims);
-    for (int i = 0; i < impl_->out_dims.nbDims; ++i) sizes.push_back(std::max(impl_->out_dims.d[i], 1));
+    for (int i = 0; i < impl_->out_dims.nbDims; ++i)
+        sizes.push_back(static_cast<int>(std::max<int64_t>(impl_->out_dims.d[i], 1)));
     cv::Mat host(static_cast<int>(sizes.size()), sizes.data(), CV_32F);
     if (impl_->out_type == nvinfer1::DataType::kFLOAT) {
         ck_cuda(cudaMemcpy(host.ptr<float>(), impl_->d_out, impl_->out_bytes, cudaMemcpyDeviceToHost), "D2H TRT out");

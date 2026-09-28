@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes.util
 import os
 from pathlib import Path
 
@@ -27,17 +28,33 @@ def kernel_source() -> str:
     return "\n\n".join(parts)
 
 
-def find_nvrtc_dll() -> str:
-    env = os.environ.get("CUDA_PATH")
-    candidates: list[Path] = []
-    if env:
-        candidates.append(Path(env) / "bin")
+def _nvrtc_dirs() -> list[Path]:
+    cuda_path = os.environ.get("CUDA_PATH")
+    dirs: list[Path] = []
+    if cuda_path:
+        dirs.append(Path(cuda_path) / "bin")
     try:
         import torch
 
-        candidates.append(Path(torch.__file__).resolve().parent / "lib")
+        dirs.append(Path(torch.__file__).resolve().parent / "lib")
     except Exception:
         pass
+    # CUDA 13 on Windows keeps DLLs in bin/x64; Linux and Jetson toolkits use lib64.
+    for root in (cuda_path, os.environ.get("CUDA_HOME"), "/usr/local/cuda"):
+        if root:
+            dirs += [Path(root) / "bin" / "x64", Path(root) / "lib64"]
+    try:
+        import nvidia  # pip CUDA wheels, e.g. nvidia/cuda_nvrtc/lib
+
+        for base in nvidia.__path__:
+            dirs += sorted(Path(base).glob("*/lib"))
+    except Exception:
+        pass
+    return dirs
+
+
+def find_nvrtc_dll() -> str:
+    candidates = _nvrtc_dirs()
     names = [
         "nvrtc64_130_0.dll",
         "nvrtc64_120_0.dll",
@@ -55,4 +72,9 @@ def find_nvrtc_dll() -> str:
             return str(p)
         for p in folder.glob("libnvrtc.so*"):
             return str(p)
-    raise FileNotFoundError("nvrtc library not found next to PyTorch or CUDA_PATH")
+    found = ctypes.util.find_library("nvrtc")
+    if found:
+        return found
+    raise FileNotFoundError(
+        "nvrtc library not found in CUDA_PATH, CUDA_HOME, /usr/local/cuda, PyTorch, or pip nvidia wheels"
+    )

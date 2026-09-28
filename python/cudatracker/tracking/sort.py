@@ -122,8 +122,10 @@ class SortTracker:
         self.iou_threshold = iou_threshold
         self.tracks: list[_Track] = []
         self._next = 1
+        self._frames = 0
 
     def update(self, detections: list[Detection]) -> list[Track]:
+        self._frames += 1
         for t in self.tracks:
             t.predict()
         if len(self.tracks) == 0:
@@ -153,7 +155,8 @@ class SortTracker:
         for t in self.tracks:
             if t.time_since_update > 0:
                 continue
-            if t.hits < self.min_hits and t.age > self.min_hits:
+            # SORT: unconfirmed tracks only show during the stream's first min_hits frames.
+            if t.hits < self.min_hits and self._frames > self.min_hits:
                 continue
             cx, cy, w, h = t.kf.as_xywh()
             out.append(

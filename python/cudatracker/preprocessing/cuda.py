@@ -16,7 +16,6 @@ from cudatracker.preprocessing.nvrtc_runtime import (
     grid_1d,
     grid_2d,
 )
-from cudatracker.types import LetterboxMeta
 
 
 class CudaPreprocessor:

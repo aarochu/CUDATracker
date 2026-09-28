@@ -7,7 +7,6 @@ import argparse
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -78,7 +77,11 @@ def build_with_python(onnx: Path, out: Path, precision: str, workspace_mib: int)
         parse_path = tmp
     logger = trt.Logger(trt.Logger.WARNING)
     builder = trt.Builder(logger)
-    network = builder.create_network()
+    flags = 0
+    if int(trt.__version__.split(".")[0]) < 10:
+        # TensorRT 8.x's ONNX parser needs an explicit-batch network; 10+ is always explicit.
+        flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    network = builder.create_network(flags)
     parser = trt.OnnxParser(network, logger)
     if not parser.parse(parse_path.read_bytes()):
         for i in range(parser.num_errors):

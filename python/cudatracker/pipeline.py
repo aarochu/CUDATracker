@@ -331,9 +331,21 @@ def write_csv_row(path: Path, row: dict[str, Any]) -> None:
     import csv
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    new = not path.exists()
+    fields = list(row.keys())
+    header = None
+    if path.exists():
+        with path.open(newline="", encoding="utf-8") as f:
+            header = next(csv.reader(f), None)
+    if header is not None and header != fields:
+        # Appending under another schema (older version, or the C++ binary) misaligns every column.
+        n = 1
+        while path.with_name(f"{path.stem}.{n}{path.suffix}").exists():
+            n += 1
+        moved = path.rename(path.with_name(f"{path.stem}.{n}{path.suffix}"))
+        log("WARN", "bench", f"{path.name} has different columns; moved it to {moved.name}")
+        header = None
     with path.open("a", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(row.keys()))
-        if new:
+        w = csv.DictWriter(f, fieldnames=fields)
+        if header is None:
             w.writeheader()
         w.writerow(json_sanitize(row))

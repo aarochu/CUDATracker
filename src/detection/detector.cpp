@@ -36,6 +36,11 @@ OpenCvDnnBackend::OpenCvDnnBackend(const std::string& onnx, bool try_cuda) {
     net_ = cv::dnn::readNetFromONNX(onnx);
     if (net_.empty()) throw std::runtime_error("OpenCV DNN failed to load " + onnx);
     bool cuda_ok = false;
+    // Without the CUDA DNN backend OpenCV silently runs on CPU, so check before claiming CUDA.
+    if (try_cuda && cv::dnn::getAvailableTargets(cv::dnn::DNN_BACKEND_CUDA).empty()) {
+        log_line("WARN", "infer", "OpenCV DNN has no CUDA backend in this build");
+        try_cuda = false;
+    }
     if (try_cuda) {
         net_.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
         net_.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);

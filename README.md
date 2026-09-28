@@ -87,6 +87,10 @@ python -m pytest tests -q
 
 GPU preprocess comparison skips if CUDA is missing.
 
+CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: ruff, pytest on Linux (Python 3.9 / 3.12 / 3.14) and Windows, the C++ CPU build, and the CUDA kernels plus TensorRT backend compiled against CUDA 12.9 and 13.4 with TensorRT headers. Hosted runners have no GPU, so GPU tests skip there.
+
+Release: push a tag (`git tag v0.2.0 && git push origin v0.2.0`). `.github/workflows/release.yml` reruns CI, builds the Linux x86_64 binary with CUDA 13.4 and TensorRT, and publishes a GitHub release with it attached.
+
 ---
 
 ## Repo map

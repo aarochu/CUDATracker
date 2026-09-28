@@ -16,6 +16,7 @@ private:
     int min_hits_;
     float iou_;
     int next_id_ = 1;
+    int frame_count_ = 0;
 
     struct Kalman {
         double x[7]{};

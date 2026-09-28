@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
-import os
-from pathlib import Path
 from typing import Any
 
 from cudatracker.logutil import log

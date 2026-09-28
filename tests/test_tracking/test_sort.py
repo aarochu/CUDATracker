@@ -61,6 +61,23 @@ def test_ids_survive_crossing():
         assert near_right.track_id == right_id
 
 
+def test_min_hits_hides_new_tracks_until_confirmed():
+    tr = SortTracker(max_age=5, min_hits=3, iou_threshold=0.3)
+    for _ in range(5):
+        steady = tr.update([_box(50, 50)])
+    assert len(steady) == 1
+    steady_id = steady[0].track_id
+    blip = tr.update([_box(50, 50), _box(400, 50)])
+    assert [t.track_id for t in blip] == [steady_id]
+    assert len(tr.update([_box(50, 50), _box(400, 50)])) == 1
+    assert len(tr.update([_box(50, 50), _box(400, 50)])) == 2
+
+
+def test_min_hits_shows_tracks_at_stream_start():
+    tr = SortTracker(max_age=5, min_hits=3, iou_threshold=0.3)
+    assert len(tr.update([_box(50, 50)])) == 1
+
+
 def test_hungarian_square_and_rectangular():
     rows, cols = linear_sum_assignment(np.array([[0.1, 0.9], [0.8, 0.2]]))
     assert sorted(zip(rows.tolist(), cols.tolist())) == [(0, 0), (1, 1)]

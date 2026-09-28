@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-from pathlib import Path
 
 from cudatracker.config import AppConfig
 from cudatracker.pipeline import flatten_row, write_csv_row
@@ -24,6 +23,19 @@ def test_csv_row_written(tmp_path):
         rows = list(csv.DictReader(f))
     assert len(rows) == 2
     assert rows[0]["backend"] == "pytorch"
+
+
+def test_csv_with_other_columns_is_moved_aside(tmp_path):
+    cfg = AppConfig()
+    row = flatten_row(cfg, {"fps": 5.0, "end_to_end": {}, "stages": {}, "hardware": {}, "analytics": {}})
+    path = tmp_path / "last_run.csv"
+    path.write_text("preprocess,backend,fps\ncpu,onnx,12.9\n", encoding="utf-8")
+    write_csv_row(path, row)
+    with path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1
+    assert list(rows[0].keys()) == list(row.keys())
+    assert (tmp_path / "last_run.1.csv").read_text(encoding="utf-8").startswith("preprocess,backend,fps")
 
 
 def test_skip_reason_field():

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <vector>
 
 namespace ct {
@@ -74,7 +75,9 @@ void write_bench_artifacts(const AppConfig& cfg, const std::vector<StageTimes>& 
 
     std::string path = cfg.output_metrics;
     if (path.empty()) path = "benchmarks/results/last_run.json";
-    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    const std::filesystem::path out_path(path);
+    std::error_code ec;
+    if (out_path.has_parent_path()) std::filesystem::create_directories(out_path.parent_path(), ec);
 
     std::ofstream js(path);
     if (!js) {
@@ -108,13 +111,34 @@ void write_bench_artifacts(const AppConfig& cfg, const std::vector<StageTimes>& 
     js << "}\n";
     js.close();
 
-    const std::string csv_path = path.substr(0, path.find_last_of('.')) + ".csv";
-    const bool fresh = std::ifstream(csv_path).fail();
-    std::ofstream csv(csv_path, std::ios::app);
-    if (fresh) {
-        csv << "preprocess,backend,precision,resolution,model,fps,e2e_mean_ms,e2e_p50_ms,e2e_p95_ms,e2e_p99_ms,"
-               "preprocess_ms,transfer_ms,inference_ms,postprocess_ms,tracking_ms,skipped,skip_reason\n";
+    const std::filesystem::path csv_file = std::filesystem::path(out_path).replace_extension(".csv");
+    const std::string csv_path = csv_file.string();
+    const std::string header =
+        "preprocess,backend,precision,resolution,model,fps,e2e_mean_ms,e2e_p50_ms,e2e_p95_ms,e2e_p99_ms,"
+        "preprocess_ms,transfer_ms,inference_ms,postprocess_ms,tracking_ms,skipped,skip_reason";
+    std::string existing;
+    {
+        std::ifstream probe(csv_path);
+        if (probe) std::getline(probe, existing);
     }
+    if (!existing.empty() && existing.back() == '\r') existing.pop_back();
+    if (!existing.empty() && existing != header) {
+        // Appending under another schema (e.g. the Python runner's) misaligns every column.
+        std::filesystem::path moved;
+        for (int n = 1;; ++n) {
+            moved = csv_file.parent_path() / (csv_file.stem().string() + "." + std::to_string(n) + ".csv");
+            if (!std::filesystem::exists(moved, ec)) break;
+        }
+        std::filesystem::rename(csv_file, moved, ec);
+        if (ec) {
+            log_line("ERROR", "bench", "cannot move " + csv_path + " aside: " + ec.message());
+            return;
+        }
+        log_line("WARN", "bench", csv_path + " has different columns; moved it to " + moved.string());
+        existing.clear();
+    }
+    std::ofstream csv(csv_path, std::ios::app);
+    if (existing.empty()) csv << header << '\n';
     csv << cfg.preprocess << ',' << cfg.backend << ',' << cfg.precision << ',' << cfg.width << 'x' << cfg.height
         << ',' << cfg.model_name << ',' << fps << ',' << e.mean << ',' << e.p50 << ',' << e.p95 << ',' << e.p99 << ','
         << ppre.mean << ',' << px.mean << ',' << pi.mean << ',' << pp.mean << ',' << pt.mean << ",false,\n";
