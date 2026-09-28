@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
             std::string eng = cfg.engine;
             if (cfg.precision == "fp32" && !cfg.engine_fp32.empty()) eng = cfg.engine_fp32;
             if (cfg.precision == "fp16" && !cfg.engine_fp16.empty()) eng = cfg.engine_fp16;
-            infer = std::make_unique<TrtBackend>(eng);
+            infer = std::make_unique<TrtBackend>(eng, cfg.imgsz);
         } else
 #endif
         {
@@ -209,6 +209,12 @@ int main(int argc, char** argv) {
         return 2;
     }
     cap.close();
-    if (bench) write_bench_artifacts(cfg, measured, hardware_line());
+    if (bench) {
+        if (measured.empty()) {
+            log_line("ERROR", "bench", "no measure frames (source ended before warmup finished)");
+            return 2;
+        }
+        write_bench_artifacts(cfg, measured, hardware_line());
+    }
     return 0;
 }

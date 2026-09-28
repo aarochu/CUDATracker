@@ -23,3 +23,12 @@ def test_paired_speedup_cpu_cuda():
     pairs = plot.paired_speedup(live, "preprocess", "cpu", "cuda", ("backend", "precision", "resolution", "model"))
     assert len(pairs) == 1
     assert abs(pairs[0][1] - 2.0) < 1e-9
+
+
+def test_resolution_axis_is_shared_across_series():
+    plot = _plot()
+    series = {
+        "cpu/onnx": [("1920x1080", 30.0), ("640x480", 60.0)],
+        "cuda/tensorrt": [("1280x720", 40.0)],
+    }
+    assert plot.resolution_order(series) == ["640x480", "1280x720", "1920x1080"]

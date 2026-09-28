@@ -155,6 +155,7 @@ SortTracker::SortTracker(int max_age, int min_hits, float iou)
     : max_age_(max_age), min_hits_(min_hits), iou_(iou) {}
 
 std::vector<Track> SortTracker::update(const std::vector<Detection>& dets) {
+    ++frame_count_;
     for (auto& t : tracks_) {
         t.kf.predict();
         t.age += 1;
@@ -229,7 +230,8 @@ std::vector<Track> SortTracker::update(const std::vector<Detection>& dets) {
     std::vector<Track> out;
     for (const auto& t : tracks_) {
         if (t.time_since_update > 0) continue;
-        if (t.hits < min_hits_ && t.age > min_hits_) continue;
+        // SORT: unconfirmed tracks only show during the stream's first min_hits frames.
+        if (t.hits < min_hits_ && frame_count_ > min_hits_) continue;
         Track o;
         o.track_id = t.id;
         o.class_id = t.class_id;

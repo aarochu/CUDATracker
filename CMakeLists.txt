@@ -48,10 +48,13 @@ if(WITH_CUDA)
   target_compile_definitions(ct_core PUBLIC CT_WITH_CUDA=1)
   target_link_libraries(ct_core PUBLIC CUDA::cudart)
   # CUDA 13 dropped sm_72 (Xavier). Keep 72 on older toolkits used by JetPack 5.
+  # sm_89 needs CUDA 11.8+; JetPack 5 ships CUDA 11.4.
   if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13)
     set(_ct_sms "75;80;86;87;89;90;100;120")
-  else()
+  elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.8)
     set(_ct_sms "72;75;80;86;87;89")
+  else()
+    set(_ct_sms "72;75;80;86;87")
   endif()
   set_target_properties(ct_core PROPERTIES CUDA_ARCHITECTURES "${_ct_sms}")
 endif()
@@ -65,7 +68,8 @@ if(WITH_TENSORRT)
       /usr/include/x86_64-linux-gnu
       $ENV{TENSORRT_ROOT}/include
   )
-  find_library(TENSORRT_LIB nvinfer
+  # Windows TensorRT 10+ puts the major version in the library name (nvinfer_10.lib).
+  find_library(TENSORRT_LIB NAMES nvinfer nvinfer_11 nvinfer_10
     HINTS
       /usr/lib/aarch64-linux-gnu
       /usr/lib/x86_64-linux-gnu

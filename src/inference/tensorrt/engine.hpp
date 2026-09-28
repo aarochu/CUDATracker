@@ -11,7 +11,7 @@ namespace ct {
 
 class TrtBackend final : public IInferBackend {
 public:
-    explicit TrtBackend(const std::string& engine_path);
+    TrtBackend(const std::string& engine_path, int imgsz);
     ~TrtBackend() override;
     TrtBackend(const TrtBackend&) = delete;
     TrtBackend& operator=(const TrtBackend&) = delete;

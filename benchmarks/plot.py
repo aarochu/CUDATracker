@@ -50,6 +50,17 @@ def fps_by_resolution(live: list[dict]):
     return series
 
 
+def resolution_order(series) -> list[str]:
+    def pixels(res: str) -> int:
+        try:
+            w, h = res.lower().split("x")
+            return int(w) * int(h)
+        except ValueError:
+            return 0
+
+    return sorted({res for pts in series.values() for res, _ in pts}, key=lambda r: (pixels(r), r))
+
+
 def _bar(ax, labels, vals, ylabel, title):
     ax.bar(range(len(vals)), vals)
     ax.set_xticks(range(len(vals)), labels, rotation=75, ha="right", fontsize=7)
@@ -138,11 +149,13 @@ def main() -> int:
 
     series = fps_by_resolution(live)
     if series:
+        order = resolution_order(series)
+        pos = {res: i for i, res in enumerate(order)}
         fig, ax = plt.subplots(figsize=(8, 4))
         for name, pts in series.items():
-            xs = list(range(len(pts)))
-            ax.plot(xs, [p[1] for p in pts], marker="o", label=name)
-            ax.set_xticks(xs, [p[0] for p in pts], rotation=30, ha="right")
+            pts = sorted(pts, key=lambda p: pos[p[0]])
+            ax.plot([pos[r] for r, _ in pts], [f for _, f in pts], marker="o", label=name)
+        ax.set_xticks(range(len(order)), order, rotation=30, ha="right")
         ax.set_ylabel("FPS")
         ax.set_title("FPS vs resolution")
         ax.legend(fontsize=7)

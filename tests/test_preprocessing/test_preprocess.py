@@ -52,6 +52,26 @@ def test_cpu_vs_cuda_fused_close():
     assert err.max() <= 1.0 / 255.0 + 1e-3
 
 
+def test_nvrtc_lookup_checks_toolkit_lib_dirs(tmp_path, monkeypatch):
+    import sys
+
+    from cudatracker.preprocessing.kernel_source import find_nvrtc_dll
+
+    monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setitem(sys.modules, "torch", None)
+    monkeypatch.setitem(sys.modules, "nvidia", None)
+    linux = tmp_path / "linux" / "lib64" / "libnvrtc.so.12"
+    linux.parent.mkdir(parents=True)
+    linux.touch()
+    monkeypatch.setenv("CUDA_HOME", str(tmp_path / "linux"))
+    assert find_nvrtc_dll() == str(linux)
+    windows = tmp_path / "win" / "bin" / "x64" / "nvrtc64_130_0.dll"
+    windows.parent.mkdir(parents=True)
+    windows.touch()
+    monkeypatch.setenv("CUDA_PATH", str(tmp_path / "win"))
+    assert find_nvrtc_dll() == str(windows)
+
+
 def test_letterbox_geometry_odd():
     meta = letterbox_geometry(333, 211, 640, True)
     assert meta.new_w + meta.pad_x <= 640
