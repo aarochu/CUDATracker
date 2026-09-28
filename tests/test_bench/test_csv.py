@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-from pathlib import Path
 
 from cudatracker.config import AppConfig
 from cudatracker.pipeline import flatten_row, write_csv_row
