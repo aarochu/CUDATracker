@@ -164,6 +164,10 @@ def apply_overrides(cfg: AppConfig, **kwargs: Any) -> AppConfig:
         cfg.model.onnx = str(kwargs["onnx"])
     if kwargs.get("engine"):
         cfg.model.engine = str(kwargs["engine"])
+        if cfg.inference.precision == "fp16":
+            cfg.model.engine_fp16 = cfg.model.engine
+        else:
+            cfg.model.engine_fp32 = cfg.model.engine
     if kwargs.get("imgsz"):
         cfg.model.imgsz = int(kwargs["imgsz"])
     if kwargs.get("output_video"):

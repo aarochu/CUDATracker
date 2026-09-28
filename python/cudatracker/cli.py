@@ -38,7 +38,7 @@ def run_live(cfg: AppConfig) -> int:
     try:
         pipe = Pipeline(cfg, loop_source=True)
         pipe.open()
-    except (BackendNotAvailable, FileNotFoundError, RuntimeError) as exc:
+    except (BackendNotAvailable, FileNotFoundError, ImportError, RuntimeError) as exc:
         log("ERROR", "app", str(exc))
         if pipe is not None:
             try:
@@ -88,7 +88,7 @@ def run_bench(cfg: AppConfig) -> int:
     try:
         pipe = Pipeline(cfg, loop_source=True)
         pipe.open()
-    except (BackendNotAvailable, FileNotFoundError, RuntimeError) as exc:
+    except (BackendNotAvailable, FileNotFoundError, ImportError, RuntimeError) as exc:
         log("ERROR", "app", str(exc))
         if pipe is not None:
             try:

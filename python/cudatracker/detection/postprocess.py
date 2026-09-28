@@ -94,7 +94,15 @@ def decode_yolo(
             float(iou_thres),
         )
     else:
-        idxs = cv2.dnn.NMSBoxes(box_list, score_list, float(conf_thres), float(iou_thres))
+        kept = []
+        for cid in np.unique(class_ids):
+            local = np.flatnonzero(class_ids == cid)
+            selected = _as_index_array(cv2.dnn.NMSBoxes(
+                [box_list[i] for i in local], [score_list[i] for i in local],
+                float(conf_thres), float(iou_thres),
+            ))
+            kept.extend(local[selected].tolist())
+        idxs = kept
     idxs = _as_index_array(idxs)
     if idxs.size == 0:
         return []

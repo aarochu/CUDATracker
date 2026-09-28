@@ -78,16 +78,24 @@ class Pipeline:
             self._writer.release()
 
     def _tensor_cpu_path(self, bgr):
-        import torch
-
         from cudatracker.telemetry.span import SpanResult
 
         with Span(cuda=False) as pre:
             np_tensor, meta = cpu_preprocess(
                 bgr, self.cfg.model.imgsz, self.cfg.preprocess.letterbox, self.cfg.preprocess.pad_value
             )
-        tensor = torch.from_numpy(np_tensor)
         xfer = SpanResult()
+        if self.cfg.inference.backend == "onnx":
+            if not getattr(self.backend, "_cuda_ep", False):
+                return np_tensor, meta, pre.result, xfer
+            try:
+                import torch
+            except ImportError:
+                return np_tensor, meta, pre.result, xfer
+        else:
+            import torch
+
+        tensor = torch.from_numpy(np_tensor)
         if self.cfg.inference.device == "gpu" and torch.cuda.is_available():
             with Span(cuda=True) as x:
                 tensor = tensor.pin_memory().to("cuda", non_blocking=True)
