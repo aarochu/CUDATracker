@@ -40,6 +40,7 @@ Then:
 
 ```text
 python3 -m pip install --user numpy PyYAML matplotlib pytest psutil ultralytics onnx onnxslim
+export PYTHONPATH="$PWD/python"
 python3 scripts/fetch_sample.py
 python3 scripts/export_onnx.py --model yolov8n --imgsz 640
 ```

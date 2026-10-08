@@ -102,6 +102,14 @@ class Pipeline:
             xfer = x.result
         return tensor, meta, pre.result, xfer
 
+    def _inference_uses_cuda(self, tensor: Any) -> bool:
+        backend = self.cfg.inference.backend
+        if backend == "onnx":
+            return bool(getattr(self.backend, "_cuda_ep", False) and getattr(tensor, "is_cuda", False))
+        if backend == "pytorch":
+            return getattr(self.backend.device, "type", None) == "cuda"
+        return backend == "tensorrt"
+
     def step(self) -> tuple[np.ndarray | None, StageTimes]:
         t_all = time.perf_counter()
         with Span(cuda=False) as cap_span:
@@ -113,14 +121,7 @@ class Pipeline:
             tensor, meta, xfer, pre = self.cuda_pre(bgr)
         else:
             tensor, meta, pre, xfer = self._tensor_cpu_path(bgr)
-        use_cuda = False
-        try:
-            import torch
-
-            use_cuda = torch.cuda.is_available()
-        except ImportError:
-            pass
-        with Span(cuda=use_cuda) as inf_span:
+        with Span(cuda=self._inference_uses_cuda(tensor)) as inf_span:
             raw = self.backend.infer(tensor)
         with Span(cuda=False) as post_span:
             dets = decode_yolo(raw, meta, self.cfg.model.conf, self.cfg.model.iou)

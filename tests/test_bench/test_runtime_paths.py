@@ -37,6 +37,51 @@ def test_onnx_session_accepts_numpy_without_torch(monkeypatch):
     assert backend.infer(arr) is arr
 
 
+def test_inference_timing_uses_active_backend_device():
+    pipe = object.__new__(Pipeline)
+    pipe.cfg = AppConfig()
+    cpu = SimpleNamespace(is_cuda=False)
+    gpu = SimpleNamespace(is_cuda=True)
+    pipe.cfg.inference.backend = "onnx"
+    pipe.backend = SimpleNamespace(_cuda_ep=False)
+    assert not pipe._inference_uses_cuda(cpu)
+    assert not pipe._inference_uses_cuda(gpu)
+    pipe.backend._cuda_ep = True
+    assert pipe._inference_uses_cuda(gpu)
+    pipe.cfg.inference.backend = "pytorch"
+    pipe.backend = SimpleNamespace(device=SimpleNamespace(type="cpu"))
+    assert not pipe._inference_uses_cuda(cpu)
+    pipe.backend.device.type = "cuda"
+    assert pipe._inference_uses_cuda(gpu)
+    pipe.cfg.inference.backend = "tensorrt"
+    assert pipe._inference_uses_cuda(cpu)
+
+
+def test_headless_live_file_stops_at_eof(monkeypatch):
+    from cudatracker import cli
+
+    seen = []
+
+    class EmptyPipeline:
+        def __init__(self, cfg, loop_source):
+            seen.append(loop_source)
+
+        def open(self):
+            pass
+
+        def step(self):
+            return None, None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "Pipeline", EmptyPipeline)
+    cfg = AppConfig()
+    cfg.visualization.enabled = False
+    assert cli.run_live(cfg) == 0
+    assert seen == [False]
+
+
 def test_matrix_cell_skips_empty_measurement(monkeypatch, tmp_path):
     from benchmarks import benchmark
 
