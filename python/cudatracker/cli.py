@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
 def run_live(cfg: AppConfig) -> int:
     pipe = None
     try:
-        pipe = Pipeline(cfg, loop_source=True)
+        pipe = Pipeline(cfg, loop_source=cfg.visualization.enabled)
         pipe.open()
     except (BackendNotAvailable, FileNotFoundError, ImportError, RuntimeError) as exc:
         log("ERROR", "app", str(exc))

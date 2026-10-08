@@ -11,12 +11,16 @@ Run a Jetson camera (or a video file) through detection and tracking, then prove
 ## Setup
 
 ```text
+pip install -r requirements.txt
 pip install -e .
 python scripts/fetch_sample.py
 python scripts/export_onnx.py --model yolov8n --imgsz 640
 ```
 
 Jetson extra steps (NVIDIA docs mapped onto this repo): [docs/jetson_setup.md](docs/jetson_setup.md). Weights: [models/README.md](models/README.md).
+
+The requirements file is for Windows/x86. On Jetson, follow the board-specific package steps in the Jetson guide and set `PYTHONPATH=python` when running from the repo root.
+The optional Jetson Docker image uses the base image's OpenCV and installs only the Python core. Mount an ONNX model and a video source at the configured paths before running its default benchmark command.
 
 ---
 
@@ -33,6 +37,7 @@ python -m cudatracker --source samples/vtest.avi --bench --warmup 20 --frames 10
 ```
 
 Keys in the window: `q` quit, `h` hardware drawer, `t` trails, `d` HUD, `p` CPU/CUDA preprocess, `1`/`2` FP32/FP16 (reloads the backend).
+With `--no-vis` outside bench mode, a video file is processed once and the command exits at end of file. Bench mode loops short clips to fill its requested frame count.
 
 C++ (after CMake). Jetson: `cmake -S . -B build -DWITH_CUDA=ON -DWITH_TENSORRT=ON`. Windows: OpenCV official pack is vc16 — point CMake at `.../opencv/build/x64/vc16/lib` if `find_package(OpenCV)` rejects VS 2026, put that `bin` on PATH, and use `-DWITH_TENSORRT=OFF` unless you have `NvInfer.h`.
 
