@@ -44,7 +44,7 @@ C++ (after CMake). Jetson: `cmake -S . -B build -DWITH_CUDA=ON -DWITH_TENSORRT=O
 ```text
 ./build/cudatracker --config configs/default.yaml --source samples/vtest.avi
 # Windows Release:
-# build\Release\cudatracker.exe --config configs/default.yaml --source samples/vtest.avi --backend onnx --bench
+# build\Release\cudatracker.exe --config configs/default.yaml --source samples/vtest.avi --backend onnx --bench --warmup 20 --frames 100
 ```
 
 ---

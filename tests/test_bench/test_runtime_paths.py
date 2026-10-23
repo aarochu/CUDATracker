@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from cudatracker.config import AppConfig
 from cudatracker.pipeline import Pipeline
@@ -112,13 +113,82 @@ def test_matrix_cell_skips_empty_measurement(monkeypatch, tmp_path):
     assert instances[0].closed
 
 
-def test_matrix_cell_skips_missing_backend_dependency(monkeypatch):
+@pytest.mark.parametrize(
+    "failure",
+    [ModuleNotFoundError("No module named 'torch'"), OSError("CUDA library blocked by the OS")],
+)
+def test_matrix_cell_skips_missing_backend_dependency(monkeypatch, failure):
     from benchmarks import benchmark
 
     def missing_dependency(*args, **kwargs):
-        raise ModuleNotFoundError("No module named 'torch'")
+        raise failure
 
     monkeypatch.setattr(benchmark, "Pipeline", missing_dependency)
     row = benchmark.run_cell(AppConfig(), "cpu", "pytorch", "fp32", "640x480", "yolov8n")
     assert row["skipped"] is True
-    assert "torch" in row["skip_reason"]
+    assert str(failure) in row["skip_reason"]
+
+
+def test_bench_reports_blocked_runtime_without_traceback(monkeypatch):
+    from cudatracker import cli
+
+    def blocked(*args, **kwargs):
+        raise OSError("CUDA library blocked by the OS")
+
+    monkeypatch.setattr(cli, "Pipeline", blocked)
+    assert cli.run_bench(AppConfig()) == 2
+
+
+def test_native_tensorrt_resizes_output_and_uses_current_stream(monkeypatch):
+    import sys
+
+    from cudatracker.inference.tensorrt_backend import _NativeEngine
+
+    class Tensor:
+        def __init__(self, shape):
+            self.shape = shape
+            self.dtype = np.float32
+            self.is_cuda = True
+
+        def data_ptr(self):
+            return id(self)
+
+    stream = SimpleNamespace(cuda_stream=1)
+    cuda = SimpleNamespace(current_stream=lambda: stream, synchronize=lambda: None)
+    fake_torch = SimpleNamespace(Tensor=Tensor, float32=np.float32, float16=np.float16, cuda=cuda, empty=lambda shape, **kwargs: Tensor(shape))
+    fake_trt = SimpleNamespace(nptype=lambda dtype: dtype)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "tensorrt", fake_trt)
+
+    class Context:
+        output_shape = (1, 84, 8400)
+
+        def set_input_shape(self, name, shape):
+            pass
+
+        def set_tensor_address(self, name, address):
+            pass
+
+        def get_tensor_shape(self, name):
+            return self.output_shape
+
+        def execute_async_v3(self, cuda_stream):
+            self.last_stream = cuda_stream
+            return True
+
+    engine = object.__new__(_NativeEngine)
+    engine.context = Context()
+    engine.engine = SimpleNamespace(get_tensor_dtype=lambda name: np.float32)
+    engine.inputs = ["images"]
+    engine.outputs = ["output"]
+    engine.out_bufs = {}
+    first = engine.infer(Tensor((1, 3, 640, 640)))
+    assert first.shape == (1, 84, 8400)
+    assert engine.context.last_stream == 1
+
+    engine.context.output_shape = (1, 84, 2100)
+    stream.cuda_stream = 2
+    second = engine.infer(Tensor((1, 3, 320, 320)))
+    assert second.shape == (1, 84, 2100)
+    assert second is not first
+    assert engine.context.last_stream == 2
