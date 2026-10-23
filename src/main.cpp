@@ -27,24 +27,39 @@ int main(int argc, char** argv) {
     std::string pre_override;
     std::string backend_override;
     std::string precision_override;
+    int warmup_override = -1;
+    int frames_override = -1;
+    bool warmup_given = false;
+    bool frames_given = false;
     bool bench = false;
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        auto next = [&]() {
-            if (i + 1 >= argc) throw std::runtime_error("missing value for " + a);
-            return std::string(argv[++i]);
-        };
-        if (a == "--config") cfg_path = next();
-        else if (a == "--source") source_override = next();
-        else if (a == "--preprocess") pre_override = next();
-        else if (a == "--backend") backend_override = next();
-        else if (a == "--precision") precision_override = next();
-        else if (a == "--bench") bench = true;
-        else if (a == "--help") {
-            std::cout << "cudatracker --config configs/default.yaml [--source f] [--preprocess cpu|cuda] "
-                         "[--backend onnx|tensorrt] [--precision fp32|fp16] [--bench]\n";
-            return 0;
+    try {
+        for (int i = 1; i < argc; ++i) {
+            std::string a = argv[i];
+            auto next = [&]() {
+                if (i + 1 >= argc) throw std::runtime_error("missing value for " + a);
+                return std::string(argv[++i]);
+            };
+            if (a == "--config") cfg_path = next();
+            else if (a == "--source") source_override = next();
+            else if (a == "--preprocess") pre_override = next();
+            else if (a == "--backend") backend_override = next();
+            else if (a == "--precision") precision_override = next();
+            else if (a == "--warmup") { warmup_override = std::stoi(next()); warmup_given = true; }
+            else if (a == "--frames") { frames_override = std::stoi(next()); frames_given = true; }
+            else if (a == "--bench") bench = true;
+            else if (a == "--help") {
+                std::cout << "cudatracker --config configs/default.yaml [--source f] [--preprocess cpu|cuda] "
+                             "[--backend onnx|tensorrt] [--precision fp32|fp16] "
+                             "[--bench --warmup N --frames N]\n";
+                return 0;
+            }
+            else throw std::runtime_error("unknown option " + a);
         }
+        if ((warmup_given && warmup_override < 0) || (frames_given && frames_override <= 0))
+            throw std::runtime_error("--warmup must be >= 0 and --frames must be > 0");
+    } catch (const std::exception& e) {
+        log_line("ERROR", "app", e.what());
+        return 2;
     }
     AppConfig cfg;
     try {
@@ -57,6 +72,8 @@ int main(int argc, char** argv) {
     if (!pre_override.empty()) cfg.preprocess = pre_override;
     if (!precision_override.empty()) cfg.precision = precision_override;
     if (!backend_override.empty()) cfg.backend = backend_override;
+    if (warmup_given) cfg.warmup_frames = warmup_override;
+    if (frames_given) cfg.measure_frames = frames_override;
     if (bench) cfg.vis = false;
 
     if (cfg.backend == "pytorch") {

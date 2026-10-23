@@ -119,7 +119,6 @@ class _NativeEngine:
         self.context = self.engine.create_execution_context()
         import torch
 
-        self.stream = int(torch.cuda.current_stream().cuda_stream)
         self.torch = torch
         n = self.engine.num_io_tensors
         self.names = [self.engine.get_tensor_name(i) for i in range(n)]
@@ -151,13 +150,17 @@ class _NativeEngine:
             self.context.set_input_shape(inp, tuple(int(x) for x in tensor.shape))
         self.context.set_tensor_address(inp, int(tensor.data_ptr()))
         for name in self.outputs:
-            if name not in self.out_bufs:
-                shape = tuple(int(x) for x in self.context.get_tensor_shape(name))
-                dtype = trt.nptype(self.engine.get_tensor_dtype(name))
-                torch_dtype = torch.float16 if np.dtype(dtype) == np.float16 else torch.float32
+            shape = tuple(int(x) for x in self.context.get_tensor_shape(name))
+            if any(dim < 0 for dim in shape):
+                raise RuntimeError(f"TensorRT output '{name}' has unresolved shape {shape}")
+            dtype = trt.nptype(self.engine.get_tensor_dtype(name))
+            torch_dtype = torch.float16 if np.dtype(dtype) == np.float16 else torch.float32
+            existing = self.out_bufs.get(name)
+            if existing is None or tuple(existing.shape) != shape or existing.dtype != torch_dtype:
                 self.out_bufs[name] = torch.empty(shape, device="cuda", dtype=torch_dtype)
             self.context.set_tensor_address(name, int(self.out_bufs[name].data_ptr()))
-        ok = self.context.execute_async_v3(self.stream)
+        stream = int(torch.cuda.current_stream().cuda_stream)
+        ok = self.context.execute_async_v3(stream)
         if not ok:
             raise RuntimeError("TensorRT execute_async_v3 failed")
         torch.cuda.synchronize()

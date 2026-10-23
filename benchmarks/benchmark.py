@@ -47,7 +47,7 @@ def run_cell(base: AppConfig, pre: str, backend: str, precision: str, resolution
     try:
         pipe = Pipeline(cfg, loop_source=True)
         pipe.open()
-    except (BackendNotAvailable, FileNotFoundError, ImportError, RuntimeError) as exc:
+    except (BackendNotAvailable, ImportError, OSError, RuntimeError) as exc:
         if pipe is not None:
             pipe.close()
         row = flatten_row(cfg, {"fps": 0, "end_to_end": {}, "stages": {}, "hardware": {}, "analytics": {}})
